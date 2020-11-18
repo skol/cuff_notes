@@ -1,0 +1,18 @@
+FROM golang:alpine as base
+RUN apk add --no-cache ca-certificates git
+RUN go get github.com/derekparker/delve/cmd/dlv
+ADD . /backend
+COPY . /backend/
+WORKDIR /backend
+RUN go mod download
+
+FROM base as dev-build
+ENV CGO_ENABLED 0
+RUN go build -gcflags "all=-N -l" -o server main.go
+
+FROM alpine as dev
+EXPOSE 8080 40000
+RUN apk add --no-cache libc6-compat ca-certificates
+COPY --from=dev-build /backend/server /backend/
+COPY --from=dev-build /go/bin/dlv /go/bin/dlv
+CMD ["/go/bin/dlv", "--listen=:40000", "--headless=true", "--api-version=2", "exec", "/backend/server"]
